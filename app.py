@@ -177,37 +177,43 @@ with tab_notes:
 with tab_gen:
     st.header("❓ Question Generator & Timed Exam Center")
 
-    exam_format = st.radio("Select Format", ["Multiple Choice (MCQ)", "Written Essay"], horizontal=True)
+    # PROMINENT, PERMANENT INSTRUCTION BOXES FOR MCQ AND WRITTEN EXAMS
+    st.subheader("📖 Step-by-Step Instructions & Guidelines")
+    col_inst1, col_inst2 = st.columns(2)
 
-    # DYNAMIC INSTRUCTION BOX BASED ON EXAM FORMAT
-    if exam_format == "Multiple Choice (MCQ)":
-        st.info(
+    with col_inst1:
+        st.success(
             """
-            **💡 Instructions for Multiple Choice (MCQ) Mode:**
-            1. **Select Source:** Ground your questions on uploaded files or general domain knowledge.
-            2. **Set Question Count:** Enter any custom number of questions (up to 100).
-            3. **Generate & Save:** Questions are created via LLM and saved automatically to your **Notebook Materials**.
-            4. **Instant Scoring & Review:** Submit your test to view instant breakdown and log wrong answers into spaced repetition.
-            """
-        )
-    else:
-        st.info(
-            """
-            **💡 Instructions for Written Essay Mode:**
-            1. **Select Source:** Questions will be grounded on your uploaded notebook materials.
-            2. **Set Question Count:** Specify how many written essay prompts you want (up to 100).
-            3. **Type Responses:** Write your answers in the input boxes before the session timer expires.
-            4. **Rubric Evaluation:** AI evaluates your answers out of 10 points across Content, Logic, Terminology, and Grammar.
+            **Multiple Choice (MCQ) Mode:**
+            - **Step 1:** Choose your topic and enter any desired question count (e.g., 5, 20, 50, or 100).
+            - **Step 2:** Select your grounding context (notebook files or general knowledge).
+            - **Step 3:** Click **Generate Questions & Start Test**.
+            - **Step 4:** Generated questions auto-save to **Notebook Materials**. Complete test for instant scoring & mistake tracking.
             """
         )
+
+    with col_inst2:
+        st.info(
+            """
+            **Written Essay Mode:**
+            - **Step 1:** Define the target topic and required essay question count.
+            - **Step 2:** Select your notebook source document to ground the prompts.
+            - **Step 3:** Click **Generate Questions & Start Test**.
+            - **Step 4:** Type written answers before timer expires to get AI rubric grading out of 10 points.
+            """
+        )
+
+    st.divider()
+
+    exam_format = st.radio("Select Format", ["Multiple Choice (MCQ)", "Written Essay"], horizontal=True)
 
     col_cfg1, col_cfg2 = st.columns([1, 1])
 
     with col_cfg1:
         topic_name = st.text_input("Chapter / Topic Name", value="Core Concepts")
         
-        # FLEXIBLE NUMBER INPUT: UNLOCKED UP TO 100 QUESTIONS
-        q_count = st.number_input("Number of Questions to Generate", min_value=1, max_value=100, value=5, step=1)
+        # UNLOCKED NUMBER INPUT: SUPPORT UP TO 100 QUESTIONS
+        q_count = st.number_input("Number of Questions to Generate (Up to 100)", min_value=1, max_value=100, value=5, step=1)
         duration_mins = st.number_input("Exam Timer (Minutes)", min_value=1, max_value=180, value=15)
 
     with col_cfg2:
