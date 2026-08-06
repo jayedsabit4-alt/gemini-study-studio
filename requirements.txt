@@ -1,1 +1,9 @@
-
+streamlit
+pandas
+pillow
+openai
+pdfplumber
+pypdf
+python-docx
+scikit-learn
+openpyxl
