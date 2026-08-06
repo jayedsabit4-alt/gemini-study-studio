@@ -173,3 +173,29 @@ def build_revision_note_prompt(mistakes_data: str) -> str:
 def build_summary_prompt(text_content: str) -> str:
     """Builds formatted prompt payload for document summarization."""
     return DOCUMENT_SUMMARY_PROMPT.format(text_content=text_content)
+
+
+# --- CROSS-MODULE COMPATIBILITY ALIASES ---
+
+build_mcq_generation_prompt = build_mcq_prompt
+build_written_evaluation_prompt = build_written_eval_prompt
+
+
+def build_rag_qa_prompt(query: str, context_chunks: Any) -> str:
+    """Compatibility wrapper for RAG prompt builder."""
+    if isinstance(context_chunks, list):
+        context_str = "\n\n".join([f"- {c}" for c in context_chunks])
+    else:
+        context_str = str(context_chunks)
+    return build_rag_prompt(context=context_str, question=query)
+
+
+def build_written_generation_prompt(
+    subject: str, chapter: str, count: int = 1, context: str = ""
+) -> str:
+    """Compatibility wrapper for written question paper prompt generation."""
+    ctx_str = f"\nContext:\n{context}" if context else ""
+    return (
+        f"Generate {count} written essay questions for Subject: '{subject}', Chapter: '{chapter}'.{ctx_str}\n"
+        "Return a JSON array of objects with keys 'question_text' and 'key_points'."
+    )
