@@ -11,7 +11,6 @@ EXPORT_FOLDER = STORAGE_DIR / "exports"
 BACKUP_FOLDER = STORAGE_DIR / "backups"
 DATABASE_PATH = STORAGE_DIR / "study.db"
 
-# Automatically create storage directory tree if missing
 for folder in [STORAGE_DIR, UPLOAD_FOLDER, EXPORT_FOLDER, BACKUP_FOLDER]:
     folder.mkdir(parents=True, exist_ok=True)
 
@@ -29,17 +28,17 @@ DEFAULT_TIMEOUT = 45.0
 DEFAULT_TEMPERATURE = 0.7
 MAX_RETRIES = 2
 
-# Document Parsing Settings
-MAX_TABLE_ROWS = 1000  # Prevent memory exhaustion on huge CSVs/Excel sheets
+# Document Parsing & Table Limits
+MAX_TABLE_ROWS = 1000
 
-# RAG & Embedding Settings
+# RAG & Speed Optimization Settings
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
-DEFAULT_CHUNK_SIZE = 500
+DEFAULT_CHUNK_SIZE = 1000       # Larger chunk size = 50% fewer embeddings needed
 DEFAULT_CHUNK_OVERLAP = 100
+MAX_DOCUMENT_CHUNKS = 200       # Caps giant files to 200 chunks for instant indexing
 DEFAULT_TOP_K = 4
-DEFAULT_SCORE_THRESHOLD = 0.25  # Rejects irrelevant low-confidence semantic matches
-MAX_RAG_CONTEXT_CHARS = 12000    # Context length safety guard for LLM prompts
+DEFAULT_SCORE_THRESHOLD = 0.25
+MAX_RAG_CONTEXT_CHARS = 12000
 
-# Compatibility Aliases for RAG Chunker
 CHUNK_SIZE = DEFAULT_CHUNK_SIZE
 CHUNK_OVERLAP = DEFAULT_CHUNK_OVERLAP
