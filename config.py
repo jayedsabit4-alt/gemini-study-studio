@@ -39,3 +39,7 @@ DEFAULT_CHUNK_OVERLAP = 100
 DEFAULT_TOP_K = 4
 DEFAULT_SCORE_THRESHOLD = 0.25  # Rejects irrelevant low-confidence semantic matches
 MAX_RAG_CONTEXT_CHARS = 12000    # Context length safety guard for LLM prompts
+
+# Compatibility Aliases for RAG Chunker
+CHUNK_SIZE = DEFAULT_CHUNK_SIZE
+CHUNK_OVERLAP = DEFAULT_CHUNK_OVERLAP
