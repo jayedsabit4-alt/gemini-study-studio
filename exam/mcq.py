@@ -1,4 +1,4 @@
-"""Multiple Choice Question (MCQ) Engine with Grounded RAG Document Support."""
+"""Multiple Choice Question (MCQ) Engine with Grounded RAG Document Support & Automatic Batching."""
 
 import logging
 import re
@@ -31,51 +31,64 @@ def generate_mcq_paper(
     context_document_text: Optional[str] = None,
     preferred_model: str = "openrouter/free",
 ) -> Tuple[bool, List[Dict[str, Any]], str]:
-    """Generates structured MCQ paper payload via LLM, optionally grounded on study document context."""
-    if context_document_text and context_document_text.strip():
-        prompt_str = (
-            f"You are a senior exam paper setter. Generate {count} multiple-choice questions (MCQs) "
-            f"based EXCLUSIVELY on the provided study context for subject '{subject}', chapter '{chapter}'.\n\n"
-            f"Study Context:\n{context_document_text[:10000]}\n\n"
-            "Output ONLY a raw JSON array of objects matching this schema:\n"
-            "[\n"
-            "  {\n"
-            '    "question_text": "Question string?",\n'
-            '    "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],\n'
-            '    "correct_answer": "A) Option 1",\n'
-            '    "explanation": "Detailed explanation based on context.",\n'
-            '    "difficulty": "Medium"\n'
-            "  }\n"
-            "]"
+    """Generates structured MCQ paper payload via LLM with automatic batching for large counts."""
+    all_valid_questions = []
+    model_used_final = preferred_model
+
+    # Batching logic: fetch at most 10 questions per API call to prevent LLM JSON truncation
+    batch_size = 10
+    remaining = count
+
+    while remaining > 0:
+        current_batch_count = min(remaining, batch_size)
+
+        if context_document_text and context_document_text.strip():
+            prompt_str = (
+                f"You are a senior exam paper setter. Generate {current_batch_count} multiple-choice questions (MCQs) "
+                f"based EXCLUSIVELY on the provided study context for subject '{subject}', chapter '{chapter}'.\n\n"
+                f"Study Context:\n{context_document_text[:10000]}\n\n"
+                "Output ONLY a raw JSON array of objects matching this schema:\n"
+                "[\n"
+                "  {\n"
+                '    "question_text": "Question string?",\n'
+                '    "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],\n'
+                '    "correct_answer": "A) Option 1",\n'
+                '    "explanation": "Detailed explanation based on context.",\n'
+                '    "difficulty": "Medium"\n'
+                "  }\n"
+                "]"
+            )
+        else:
+            prompt_str = build_mcq_prompt(subject=subject, chapter=chapter, count=current_batch_count)
+
+        messages = [{"role": "user", "content": prompt_str}]
+
+        success, result_json, model_used = generate_json(
+            api_key=api_key,
+            messages=messages,
+            preferred_model=preferred_model,
+            temperature=0.3,
         )
-    else:
-        prompt_str = build_mcq_prompt(subject=subject, chapter=chapter, count=count)
+        model_used_final = model_used
 
-    messages = [{"role": "user", "content": prompt_str}]
+        if success and isinstance(result_json, list):
+            for item in result_json:
+                if isinstance(item, dict) and "question_text" in item and "options" in item and "correct_answer" in item:
+                    all_valid_questions.append({
+                        "question_text": item["question_text"],
+                        "options": item["options"],
+                        "correct_answer": item["correct_answer"],
+                        "explanation": item.get("explanation", "No explanation provided."),
+                        "difficulty": item.get("difficulty", "Medium"),
+                    })
 
-    success, result_json, model_used = generate_json(
-        api_key=api_key,
-        messages=messages,
-        preferred_model=preferred_model,
-        temperature=0.3,
-    )
+        remaining -= current_batch_count
 
-    if not success or not isinstance(result_json, list):
-        logger.error("MCQ paper generation failed: %s", model_used)
-        return False, [], model_used
+    if not all_valid_questions:
+        logger.error("MCQ paper generation failed: %s", model_used_final)
+        return False, [], model_used_final
 
-    valid_questions = []
-    for item in result_json:
-        if isinstance(item, dict) and "question_text" in item and "options" in item and "correct_answer" in item:
-            valid_questions.append({
-                "question_text": item["question_text"],
-                "options": item["options"],
-                "correct_answer": item["correct_answer"],
-                "explanation": item.get("explanation", "No explanation provided."),
-                "difficulty": item.get("difficulty", "Medium"),
-            })
-
-    return True, valid_questions, model_used
+    return True, all_valid_questions[:count], model_used_final
 
 
 def score_mcq_submission(
