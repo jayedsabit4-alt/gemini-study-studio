@@ -1,60 +1,62 @@
+"""Domain Model Dataclasses for System Entities."""
+
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 
 @dataclass
 class Subject:
-    id: Optional[int]
     name: str
+    id: Optional[int] = None
     created_at: Optional[datetime] = None
 
 
 @dataclass
 class Chapter:
-    id: Optional[int]
     subject_id: int
     name: str
+    id: Optional[int] = None
     created_at: Optional[datetime] = None
 
 
 @dataclass
 class Document:
-    id: Optional[int]
-    subject_id: Optional[int]
-    chapter_id: Optional[int]
     name: str
     file_type: str
-    file_path: Optional[str]
     text_content: str
+    id: Optional[int] = None
+    subject_id: Optional[int] = None
+    chapter_id: Optional[int] = None
+    file_path: Optional[str] = None
     created_at: Optional[datetime] = None
 
 
 @dataclass
 class ChatThread:
-    id: Optional[int]
     title: str
+    id: Optional[int] = None
     updated_at: Optional[datetime] = None
 
 
 @dataclass
 class ChatHistory:
-    id: Optional[int]
     thread_id: int
     role: str
     content: str
+    id: Optional[int] = None
     timestamp: Optional[datetime] = None
 
 
 @dataclass
 class Question:
-    id: Optional[int]
-    subject_id: Optional[int]
-    chapter_id: Optional[int]
     question_text: str
-    options_json: Optional[str]  # JSON array string: ["A", "B", "C", "D"]
     correct_answer: str
-    explanation: Optional[str]
+    id: Optional[int] = None
+    subject_id: Optional[int] = None
+    chapter_id: Optional[int] = None
+    options_json: Optional[str] = None  # JSON array string: ["A", "B", "C", "D"]
+    explanation: Optional[str] = None
     question_type: str = "MCQ"  # MCQ, Written, TrueFalse, FillBlank
     difficulty: str = "Medium"  # Easy, Medium, Hard
     source: Optional[str] = None
@@ -64,59 +66,59 @@ class Question:
 
 @dataclass
 class MCQExam:
-    id: Optional[int]
-    subject_id: Optional[int]
     title: str
     total_questions: int
     score: float
+    id: Optional[int] = None
+    subject_id: Optional[int] = None
     created_at: Optional[datetime] = None
 
 
 @dataclass
 class ExamQuestion:
-    id: Optional[int]
     exam_id: int
     question_id: int
-    user_answer: Optional[str]
-    is_correct: Optional[bool]
+    id: Optional[int] = None
+    user_answer: Optional[str] = None
+    is_correct: Optional[bool] = None
     time_taken_seconds: Optional[int] = None
 
 
 @dataclass
 class WrittenExam:
-    id: Optional[int]
-    subject_id: Optional[int]
     title: str
     total_score: float
+    id: Optional[int] = None
+    subject_id: Optional[int] = None
     feedback_json: Optional[str] = None
     created_at: Optional[datetime] = None
 
 
 @dataclass
 class QuestionAttempt:
-    id: Optional[int]
     question_id: int
-    exam_id: Optional[int]
     is_correct: bool
     response_time_seconds: int
+    id: Optional[int] = None
+    exam_id: Optional[int] = None
     attempted_at: Optional[datetime] = None
 
 
 @dataclass
 class Mistake:
-    id: Optional[int]
     question_id: int
-    exam_id: Optional[int]
-    wrong_count: int
-    correct_count: int
+    id: Optional[int] = None
+    exam_id: Optional[int] = None
+    wrong_count: int = 0
+    correct_count: int = 0
     last_attempted: Optional[datetime] = None
 
 
 @dataclass
 class ChapterMastery:
-    id: Optional[int]
     subject_id: int
     chapter_id: int
+    id: Optional[int] = None
     mastery_percentage: float = 0.0
     status: str = "Unreviewed"  # Weak, Moderate, Strong, Mastered
     last_reviewed: Optional[datetime] = None
@@ -124,21 +126,21 @@ class ChapterMastery:
 
 @dataclass
 class Flashcard:
-    id: Optional[int]
-    question_id: Optional[int]
     front_text: str
     back_text: str
+    id: Optional[int] = None
+    question_id: Optional[int] = None
     created_at: Optional[datetime] = None
 
 
 @dataclass
 class RevisionSchedule:
-    id: Optional[int]
     question_id: int
+    id: Optional[int] = None
     easiness_factor: float = 2.5
     interval: int = 1
     repetitions: int = 0
-    next_review_date: str = ""  # YYYY-MM-DD
+    next_review_date: Optional[date] = None
 
 
 @dataclass
@@ -149,8 +151,8 @@ class Setting:
 
 @dataclass
 class Analytics:
-    id: Optional[int]
-    subject_id: Optional[int]
     metric_name: str
     metric_value: float
+    id: Optional[int] = None
+    subject_id: Optional[int] = None
     recorded_at: Optional[datetime] = None
