@@ -1,18 +1,26 @@
 import sqlite3
+import sys
+from pathlib import Path
 
-DB_NAME = "study.db"
+# Ensure root directory is accessible for configuration imports
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
+
+from config import DATABASE_PATH
 
 
 def get_connection():
-    """Returns a SQLite connection with row factory and foreign keys enabled."""
-    conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+    """Returns a SQLite connection to storage/study.db with row factory and foreign keys enabled."""
+    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
 
 def init_db():
-    """Initializes all 15 relational schema tables automatically when app starts."""
+    """Initializes all 15 relational schema tables automatically inside storage/study.db."""
     with get_connection() as conn:
         cursor = conn.cursor()
 
@@ -37,7 +45,7 @@ def init_db():
             )
         """)
 
-        # 3. Documents Table (Added file_path)
+        # 3. Documents Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS documents (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,7 +61,7 @@ def init_db():
             )
         """)
 
-        # 4. Chat Threads Table (Uses ID primary key)
+        # 4. Chat Threads Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS chat_threads (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,7 +70,7 @@ def init_db():
             )
         """)
 
-        # 5. Chat History Table (Referenced by thread_id)
+        # 5. Chat History Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS chat_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,7 +82,7 @@ def init_db():
             )
         """)
 
-        # 6. Questions Master Bank (Added type, difficulty, source, page_number)
+        # 6. Questions Master Bank
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS questions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -134,7 +142,7 @@ def init_db():
             )
         """)
 
-        # 10. Question Attempts Log (Detailed Granular Performance Engine)
+        # 10. Question Attempts Log
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS question_attempts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -148,7 +156,7 @@ def init_db():
             )
         """)
 
-        # 11. Mistakes Engine Table (Linked with Optional Exam context)
+        # 11. Mistakes Engine Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS mistakes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -163,7 +171,7 @@ def init_db():
             )
         """)
 
-        # 12. Chapter Mastery Cache Table
+        # 12. Chapter Mastery Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS mastery (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -190,7 +198,7 @@ def init_db():
             )
         """)
 
-        # 14. Revision Schedule Table (SuperMemo SM-2 Spaced Repetition)
+        # 14. Revision Schedule Table (SuperMemo SM-2)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS revision_schedule (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -223,7 +231,7 @@ def init_db():
             )
         """)
 
-        # Default fallback thread and default app settings
+        # Default fallback values
         cursor.execute("INSERT OR IGNORE INTO chat_threads (id, title) VALUES (1, 'Default Chat')")
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('theme', 'dark')")
         cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('preferred_model', 'openrouter/free')")
@@ -233,4 +241,4 @@ def init_db():
 
 if __name__ == "__main__":
     init_db()
-    print("Database schema successfully upgraded and initialized as 'study.db'.")
+    print(f"Database schema initialized successfully at '{DATABASE_PATH}'.")
