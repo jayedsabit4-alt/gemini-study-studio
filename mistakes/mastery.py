@@ -11,18 +11,19 @@ logger = logging.getLogger(__name__)
 def calculate_subject_mastery(
     existing_conn: Optional[sqlite3.Connection] = None,
 ) -> List[Dict[str, Any]]:
-    """Calculates accuracy percentages and mastery tiers per subject."""
+    """Calculates accuracy percentages and mastery tiers per subject by querying mcq_exams."""
     conn = existing_conn or get_db_connection()
     try:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT subject,
-                   COUNT(*) as total_exams,
-                   AVG(score_percentage) as average_score,
-                   MAX(score_percentage) as highest_score
-            FROM exam_results
-            GROUP BY subject
+            SELECT s.name AS subject,
+                   COUNT(e.id) AS total_exams,
+                   AVG(e.score) AS average_score,
+                   MAX(e.score) AS highest_score
+            FROM mcq_exams e
+            JOIN subjects s ON e.subject_id = s.id
+            GROUP BY s.id, s.name
             ORDER BY average_score DESC
             """
         )
