@@ -1,7 +1,7 @@
 """Text Chunking Module for Document Ingestion."""
 
 from typing import Any, Dict, List
-from config import CHUNK_OVERLAP, CHUNK_SIZE
+from config import CHUNK_OVERLAP, CHUNK_SIZE, MAX_DOCUMENT_CHUNKS
 
 
 def create_chunks(
@@ -9,7 +9,7 @@ def create_chunks(
     chunk_size: int = CHUNK_SIZE,
     chunk_overlap: int = CHUNK_OVERLAP,
 ) -> List[Dict[str, Any]]:
-    """Splits extracted document text into overlapping chunks with metadata tags."""
+    """Splits extracted document text into overlapping chunks with safety bounds."""
     chunks = []
     chunk_id = 0
 
@@ -31,6 +31,9 @@ def create_chunks(
 
         step = max(1, chunk_size - chunk_overlap)
         for i in range(0, len(words), step):
+            if len(chunks) >= MAX_DOCUMENT_CHUNKS:
+                break
+
             chunk_words = words[i : i + chunk_size]
             chunk_text = " ".join(chunk_words)
 
@@ -48,5 +51,8 @@ def create_chunks(
                 "metadata": meta,
             })
             chunk_id += 1
+
+        if len(chunks) >= MAX_DOCUMENT_CHUNKS:
+            break
 
     return chunks
