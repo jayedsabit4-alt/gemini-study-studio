@@ -27,3 +27,7 @@ def init_db(db_path: Optional[str] = None):
             cursor.execute(statement)
         conn.commit()
         logger.info("Database schema initialized successfully at '%s'.", db_path or DATABASE_PATH)
+
+
+# Direct function alias for cross-module import compatibility
+get_connection = get_db_connection
