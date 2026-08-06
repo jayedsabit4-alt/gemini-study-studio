@@ -29,6 +29,9 @@ DEFAULT_TIMEOUT = 45.0
 DEFAULT_TEMPERATURE = 0.7
 MAX_RETRIES = 2
 
+# Document Parsing Settings
+MAX_TABLE_ROWS = 1000  # Prevent memory exhaustion on huge CSVs/Excel sheets
+
 # RAG & Embedding Settings
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 DEFAULT_CHUNK_SIZE = 500
