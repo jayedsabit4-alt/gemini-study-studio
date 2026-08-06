@@ -34,11 +34,11 @@ from mistakes import generate_adaptive_revision_notes, get_due_mistakes, log_mis
 from rag import RAGEngine
 from ui.styles import apply_gemini_theme
 
-# Initialize Schema & Theme
+# Initialize Database & Styles
 init_db()
 apply_gemini_theme()
 
-# Session State
+# Session State Initialization
 if "rag_engine" not in st.session_state:
     st.session_state.rag_engine = RAGEngine()
 
@@ -52,7 +52,7 @@ if "exam_timer" not in st.session_state:
     st.session_state.exam_timer = None
 
 
-# --- SIDEBAR: NOTEBOOK WORKSPACE ---
+# --- SIDEBAR WORKSPACE ---
 
 st.sidebar.title("📓 Notebook Manager")
 
@@ -60,7 +60,7 @@ api_key = st.sidebar.text_input(
     "OpenRouter API Key",
     type="password",
     value=os.getenv("OPENROUTER_API_KEY", ""),
-    help="Required for question generation and tutor QA.",
+    help="Required for LLM operations.",
 )
 
 selected_model = st.sidebar.selectbox("LLM Model Target", options=FALLBACK_MODELS, index=0)
@@ -69,8 +69,8 @@ st.sidebar.divider()
 
 st.sidebar.subheader("➕ Create Notebook")
 with st.sidebar.form("create_notebook_form", clear_on_submit=True):
-    new_nb_title = st.text_input("Notebook Title", placeholder="e.g., Statistics & Data Science")
-    new_nb_desc = st.text_area("Description", placeholder="Optional details...")
+    new_nb_title = st.text_input("Notebook Title", placeholder="e.g., Statistics Workspace")
+    new_nb_desc = st.text_area("Description", placeholder="Optional description...")
     if st.form_submit_button("Create Workspace"):
         if new_nb_title.strip():
             create_notebook(new_nb_title, new_nb_desc)
@@ -87,15 +87,15 @@ nb_options = {f"{nb['title']}": nb for nb in all_notebooks}
 selected_nb_label = st.sidebar.selectbox("Active Workspace", options=list(nb_options.keys()))
 active_notebook = nb_options[selected_nb_label]
 
-if st.sidebar.button("🗑️ Delete Current Notebook", help="Delete active notebook and files"):
+if st.sidebar.button("🗑️ Delete Current Notebook"):
     delete_notebook(active_notebook["id"])
     st.rerun()
 
 st.sidebar.divider()
 
-st.sidebar.subheader("📄 Notebook Sources")
+st.sidebar.subheader("📄 Upload Notebook Sources")
 uploaded_files = st.sidebar.file_uploader(
-    f"Upload documents to '{active_notebook['title']}'",
+    f"Add sources to '{active_notebook['title']}'",
     type=["pdf", "docx", "pptx", "txt", "md", "csv", "xlsx", "png", "jpg", "jpeg", "json"],
     accept_multiple_files=True,
 )
@@ -104,7 +104,7 @@ if uploaded_files:
     for uploaded_file in uploaded_files:
         filename_tagged = f"[NB-{active_notebook['id']}] {uploaded_file.name}"
         if st.sidebar.button(f"Index {uploaded_file.name}", key=f"btn_{uploaded_file.name}"):
-            with st.spinner(f"Parsing & Indexing '{uploaded_file.name}'..."):
+            with st.spinner(f"Indexing '{uploaded_file.name}'..."):
                 file_bytes = uploaded_file.read()
                 res = st.session_state.rag_engine.index_document(file_bytes, filename_tagged)
                 if res["status"] == "indexed":
@@ -112,7 +112,7 @@ if uploaded_files:
                 elif res["status"] == "skipped":
                     st.sidebar.info("Already indexed.")
                 else:
-                    st.sidebar.error(res.get("reason", "Indexing failed."))
+                    st.sidebar.error(res.get("reason", "Failed to index."))
 
 all_chunks = st.session_state.rag_engine.vector_store.chunks
 active_prefix = f"[NB-{active_notebook['id']}]"
@@ -131,7 +131,7 @@ if notebook_files:
             st.rerun()
 
 
-# --- MAIN INTERFACE TABS ---
+# --- MAIN WORKSPACE TABS ---
 
 tab_notes, tab_gen, tab_tutor, tab_analytics = st.tabs([
     "📝 Notebook & Saved Materials",
@@ -179,25 +179,25 @@ with tab_gen:
 
     exam_format = st.radio("Select Format", ["Multiple Choice (MCQ)", "Written Essay"], horizontal=True)
 
-    # DETAILED INSTRUCTION BANNERS
+    # DYNAMIC INSTRUCTION BOX BASED ON EXAM FORMAT
     if exam_format == "Multiple Choice (MCQ)":
         st.info(
             """
-            **📌 How Multiple Choice (MCQ) Mode Works:**
-            1. **Set Parameters:** Choose a topic, question count, and duration.
-            2. **Grounding Source:** Select your uploaded files or use general knowledge.
-            3. **Generate & Auto-Save:** Generated MCQs are saved automatically into your **Notebook Materials**.
-            4. **Instant Grading:** Upon submission, answers are scored and mistaken questions are logged for spaced repetition review.
+            **💡 Instructions for Multiple Choice (MCQ) Mode:**
+            1. **Select Source:** Ground your questions on uploaded files or general domain knowledge.
+            2. **Set Question Count:** Enter any custom number of questions (up to 100).
+            3. **Generate & Save:** Questions are created via LLM and saved automatically to your **Notebook Materials**.
+            4. **Instant Scoring & Review:** Submit your test to view instant breakdown and log wrong answers into spaced repetition.
             """
         )
     else:
         st.info(
             """
-            **📌 How Written Essay Mode Works:**
-            1. **Set Parameters:** Define your target topic and written question count.
-            2. **Grounding Source:** Ground questions strictly on your notebook source files.
-            3. **Submit Answers:** Type your responses into the text areas before the timer expires.
-            4. **AI Rubric Grading:** Answers are evaluated out of 10 points on Content, Logic, Terminology, and Grammar with detailed constructive feedback.
+            **💡 Instructions for Written Essay Mode:**
+            1. **Select Source:** Questions will be grounded on your uploaded notebook materials.
+            2. **Set Question Count:** Specify how many written essay prompts you want (up to 100).
+            3. **Type Responses:** Write your answers in the input boxes before the session timer expires.
+            4. **Rubric Evaluation:** AI evaluates your answers out of 10 points across Content, Logic, Terminology, and Grammar.
             """
         )
 
@@ -205,14 +205,16 @@ with tab_gen:
 
     with col_cfg1:
         topic_name = st.text_input("Chapter / Topic Name", value="Core Concepts")
-        q_count = st.slider("Number of Questions to Generate", min_value=1, max_value=15, value=5, step=1)
-        duration_mins = st.number_input("Exam Timer (Minutes)", min_value=1, max_value=120, value=10)
+        
+        # FLEXIBLE NUMBER INPUT: UNLOCKED UP TO 100 QUESTIONS
+        q_count = st.number_input("Number of Questions to Generate", min_value=1, max_value=100, value=5, step=1)
+        duration_mins = st.number_input("Exam Timer (Minutes)", min_value=1, max_value=180, value=15)
 
     with col_cfg2:
         source_options = ["All Notebook Sources", "General Domain Knowledge"] + [
             f.replace(active_prefix, "").strip() for f in notebook_files
         ]
-        selected_source_option = st.selectbox("Grounding Source", options=source_options)
+        selected_source_option = st.selectbox("Grounding Source Context", options=source_options)
 
         context_text = None
         if selected_source_option == "All Notebook Sources" and notebook_files:
@@ -227,13 +229,13 @@ with tab_gen:
         if not api_key:
             st.error("Please enter an OpenRouter API key in the sidebar.")
         else:
-            with st.spinner("Generating question paper..."):
+            with st.spinner(f"Generating {q_count} questions via AI..."):
                 if exam_format == "Multiple Choice (MCQ)":
                     success, q_paper, model_used = generate_mcq_paper(
                         api_key=api_key,
                         subject=active_notebook["title"],
                         chapter=topic_name,
-                        count=q_count,
+                        count=int(q_count),
                         context_document_text=context_text,
                         preferred_model=selected_model,
                     )
@@ -242,13 +244,13 @@ with tab_gen:
                         api_key=api_key,
                         subject=active_notebook["title"],
                         chapter=topic_name,
-                        count=q_count,
+                        count=int(q_count),
                         context_document_text=context_text,
                         preferred_model=selected_model,
                     )
 
                 if success and q_paper:
-                    # Auto-save generated questions to notebook
+                    # Auto-save questions to notebook
                     formatted_q = json.dumps(q_paper, indent=2)
                     save_note(
                         active_notebook["id"],
@@ -264,14 +266,14 @@ with tab_gen:
                         "questions": q_paper,
                         "model_used": model_used,
                     }
-                    st.session_state.exam_timer = ExamTimer(duration_minutes=duration_mins)
+                    st.session_state.exam_timer = ExamTimer(duration_minutes=int(duration_mins))
                     st.session_state.exam_timer.start()
                     st.success("Questions generated and saved to notebook!")
                     st.rerun()
                 else:
-                    st.error("Question generation failed. Verify model status or API key.")
+                    st.error("Question generation failed. Check API key or target model.")
 
-    # Active Test Evaluation Section
+    # Active Test Evaluation
     if st.session_state.active_exam:
         st.divider()
         exam = st.session_state.active_exam
