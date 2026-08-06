@@ -37,3 +37,5 @@ EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 DEFAULT_CHUNK_SIZE = 500
 DEFAULT_CHUNK_OVERLAP = 100
 DEFAULT_TOP_K = 4
+DEFAULT_SCORE_THRESHOLD = 0.25  # Rejects irrelevant low-confidence semantic matches
+MAX_RAG_CONTEXT_CHARS = 12000    # Context length safety guard for LLM prompts
