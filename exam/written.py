@@ -1,4 +1,4 @@
-"""Written Exam Question Generator and Session Manager."""
+"""Written Exam Question Generator and Session Manager with Automatic Batching."""
 
 import logging
 from typing import Any, Dict, List, Optional, Tuple
@@ -17,54 +17,66 @@ def generate_written_question_paper(
     context_document_text: Optional[str] = None,
     preferred_model: str = "openrouter/free",
 ) -> Tuple[bool, List[Dict[str, Any]], str]:
-    """Generates written essay/short-answer question papers, optionally grounded on study document context."""
-    if context_document_text and context_document_text.strip():
-        prompt_str = (
-            f"You are a senior examiner. Generate {count} written/essay exam questions "
-            f"based EXCLUSIVELY on the provided study context for subject '{subject}', chapter '{chapter}'.\n\n"
-            f"Study Context:\n{context_document_text}\n\n"
-            "Output ONLY a raw JSON array of objects matching this schema:\n"
-            "[\n"
-            "  {\n"
-            '    "question_text": "Detailed exam question?",\n'
-            '    "key_points": "Bullet list of expected key concepts and facts from the context."\n'
-            "  }\n"
-            "]"
+    """Generates written essay/short-answer question papers with automatic batching for large counts."""
+    all_questions = []
+    model_used_final = preferred_model
+
+    batch_size = 5
+    remaining = count
+
+    while remaining > 0:
+        current_batch_count = min(remaining, batch_size)
+
+        if context_document_text and context_document_text.strip():
+            prompt_str = (
+                f"You are a senior examiner. Generate {current_batch_count} written/essay exam questions "
+                f"based EXCLUSIVELY on the provided study context for subject '{subject}', chapter '{chapter}'.\n\n"
+                f"Study Context:\n{context_document_text[:10000]}\n\n"
+                "Output ONLY a raw JSON array of objects matching this schema:\n"
+                "[\n"
+                "  {\n"
+                '    "question_text": "Detailed exam question?",\n'
+                '    "key_points": "Bullet list of expected key concepts and facts from the context."\n'
+                "  }\n"
+                "]"
+            )
+        else:
+            prompt_str = (
+                f"You are a senior examiner. Generate {current_batch_count} written/essay exam questions "
+                f"for subject '{subject}', chapter '{chapter}'.\n"
+                "Output ONLY a raw JSON array of objects matching this schema:\n"
+                "[\n"
+                "  {\n"
+                '    "question_text": "Detailed exam question?",\n'
+                '    "key_points": "Bullet list of expected key concepts and facts for evaluation."\n'
+                "  }\n"
+                "]"
+            )
+
+        messages = [{"role": "user", "content": prompt_str}]
+
+        success, result_json, model_used = generate_json(
+            api_key=api_key,
+            messages=messages,
+            preferred_model=preferred_model,
+            temperature=0.3,
         )
-    else:
-        prompt_str = (
-            f"You are a senior examiner. Generate {count} written/essay exam questions "
-            f"for subject '{subject}', chapter '{chapter}'.\n"
-            "Output ONLY a raw JSON array of objects matching this schema:\n"
-            "[\n"
-            "  {\n"
-            '    "question_text": "Detailed exam question?",\n'
-            '    "key_points": "Bullet list of expected key concepts and facts for evaluation."\n'
-            "  }\n"
-            "]"
-        )
+        model_used_final = model_used
 
-    messages = [{"role": "user", "content": prompt_str}]
+        if success and isinstance(result_json, list):
+            for item in result_json:
+                if isinstance(item, dict) and "question_text" in item and "key_points" in item:
+                    all_questions.append({
+                        "question_text": item["question_text"],
+                        "key_points": item["key_points"],
+                    })
 
-    success, result_json, model_used = generate_json(
-        api_key=api_key,
-        messages=messages,
-        preferred_model=preferred_model,
-        temperature=0.3,
-    )
+        remaining -= current_batch_count
 
-    if not success or not isinstance(result_json, list):
-        return False, [], model_used
+    if not all_questions:
+        return False, [], model_used_final
 
-    questions = []
-    for item in result_json:
-        if isinstance(item, dict) and "question_text" in item and "key_points" in item:
-            questions.append({
-                "question_text": item["question_text"],
-                "key_points": item["key_points"],
-            })
-
-    return True, questions, model_used
+    return True, all_questions[:count], model_used_final
 
 
 def grade_written_exam(
