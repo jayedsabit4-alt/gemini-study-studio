@@ -31,13 +31,13 @@ from mistakes import (
     update_mistake_review,
 )
 from rag import RAGEngine
-from ui.styles import apply_custom_styles
+from ui.styles import apply_gemini_theme
 
 # Initialize Database Schema
 init_db()
 
 # Apply UI CSS Styling
-apply_custom_styles()
+apply_gemini_theme()
 
 
 # Initialize Session State
@@ -62,42 +62,32 @@ def save_exam_record(
     score_percentage: float,
     model_used: str,
 ):
-    """Persists completed exam score and logs study session for streak tracking."""
+    """Persists completed exam score to database matching system schema."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO exam_results (
-                subject, chapter, exam_type, total_questions, score_percentage, model_used
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (subject, chapter, exam_type, total_questions, score_percentage, model_used),
-        )
-        cursor.execute(
-            """
-            INSERT INTO study_sessions (session_type, duration_seconds)
-            VALUES (?, ?)
-            """,
-            (f"EXAM_{exam_type}", 0),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+        
+        # Resolve subject_id
+        cursor.execute("SELECT id FROM subjects WHERE name = ?", (subject,))
+        s_row = cursor.fetchone()
+        if s_row:
+            subject_id = s_row[0]
+        else:
+            cursor.execute("INSERT INTO subjects (name) VALUES (?)", (subject,))
+            subject_id = cursor.lastrowid
 
+        title = f"{subject} - {chapter} ({exam_type})"
 
-def log_activity_session(session_type: str):
-    """Logs active daily study session to maintain study streak analytics."""
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO study_sessions (session_type, duration_seconds)
-            VALUES (?, ?)
-            """,
-            (session_type, 0),
-        )
+        if exam_type == "MCQ":
+            cursor.execute(
+                "INSERT INTO mcq_exams (subject_id, title, total_questions, score) VALUES (?, ?, ?, ?)",
+                (subject_id, title, total_questions, score_percentage),
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO written_exams (subject_id, title, total_score) VALUES (?, ?, ?)",
+                (subject_id, title, score_percentage),
+            )
         conn.commit()
     finally:
         conn.close()
@@ -204,7 +194,6 @@ with tab_chat:
         if not api_key:
             st.error("Please enter an OpenRouter API Key in the sidebar to generate responses.")
         else:
-            log_activity_session("SMART_TUTOR_CHAT")
             st.session_state.chat_history.append({"role": "user", "content": user_query})
             with st.chat_message("user"):
                 st.markdown(user_query)
@@ -426,7 +415,7 @@ with tab_spaced:
             else:
                 with st.spinner("Generating AI revision guide..."):
                     mistakes_summary_str = "\n".join([
-                        f"- Subject: {m['subject']}, Q: {m['question_text']}, Wrong: {m['user_answer']}, Correct: {m['correct_answer']}"
+                        f"- Question: {m['question_text']}, Correct Answer: {m['correct_answer']}"
                         for m in due_mistakes
                     ])
                     success, rev_notes, model_used = generate_adaptive_revision_notes(
@@ -446,13 +435,12 @@ with tab_spaced:
         st.info(f"You have **{len(due_mistakes)}** mistake logs scheduled for revision.")
         
         current_item = due_mistakes[0]
-        st.subheader(f"Subject: {current_item['subject']} | Chapter: {current_item['chapter']}")
+        q_id = current_item.get("question_id") or current_item.get("id")
 
         with st.container():
             st.markdown(f"### Question:\n{current_item['question_text']}")
             
             with st.expander("👁️ Reveal Correct Answer & Explanation"):
-                st.markdown(f"**Your Previous Answer:** `{current_item['user_answer']}`")
                 st.markdown(f"**Correct Answer:** `{current_item['correct_answer']}`")
                 st.markdown(f"**Explanation:** {current_item['explanation']}")
 
@@ -472,8 +460,7 @@ with tab_spaced:
 
             for col, label, q_val in ratings:
                 if col.button(label, key=f"rate_{q_val}"):
-                    update_res = update_mistake_review(current_item["id"], review_quality=q_val)
-                    log_activity_session("SPACED_REPETITION_REVIEW")
+                    update_res = update_mistake_review(q_id, review_quality=q_val)
                     st.success(f"Updated! Next review in {update_res['new_interval_days']} days.")
                     st.rerun()
 
