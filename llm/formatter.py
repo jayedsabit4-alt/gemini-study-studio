@@ -1,6 +1,21 @@
 import json
 import re
-from typing import Any, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
+
+
+def format_chat_messages(
+    messages: List[Dict[str, str]], system_prompt: str = ""
+) -> List[Dict[str, str]]:
+    """Formats role-content message dictionaries for LLM payloads, prepending system prompt if provided."""
+    formatted = []
+    if system_prompt and system_prompt.strip():
+        formatted.append({"role": "system", "content": system_prompt.strip()})
+
+    for msg in messages:
+        if isinstance(msg, dict) and "role" in msg and "content" in msg:
+            formatted.append({"role": msg["role"], "content": msg["content"]})
+
+    return formatted
 
 
 def fix_latex_formatting(text: str) -> str:
