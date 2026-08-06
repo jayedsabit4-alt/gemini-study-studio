@@ -1,100 +1,163 @@
 import sqlite3
 
-DB_NAME = "study_platform.db"
+DB_NAME = "study.db"
+
 
 def get_connection():
+    """Returns a SQLite connection with row factory and foreign keys enabled."""
     conn = sqlite3.connect(DB_NAME, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
+
 def init_db():
+    """Initializes all relational schema tables automatically when app starts."""
     with get_connection() as conn:
         cursor = conn.cursor()
-        
-        # Threads (ORDER BY updated_at DESC for latest first)
+
+        # 1. Subjects Table
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS threads (
+            CREATE TABLE IF NOT EXISTS subjects (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT UNIQUE NOT NULL,
+                name TEXT UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 2. Chapters Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS chapters (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subject_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
+                UNIQUE(subject_id, name)
+            )
+        """)
+
+        # 3. Documents Table (RAG Context Sources)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subject_id INTEGER,
+                chapter_id INTEGER,
+                name TEXT NOT NULL,
+                file_type TEXT NOT NULL,
+                text_content TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE SET NULL,
+                FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE SET NULL
+            )
+        """)
+
+        # 4. Chat Threads Table (Tracks last active update for sorting latest first)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS chat_threads (
+                title TEXT PRIMARY KEY,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
-        # Chat Messages
+
+        # 5. Chat History Table
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS chat_messages (
+            CREATE TABLE IF NOT EXISTS chat_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                thread_title TEXT,
+                thread_title TEXT NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (thread_title) REFERENCES threads(title) ON DELETE CASCADE
+                FOREIGN KEY (thread_title) REFERENCES chat_threads(title) ON DELETE CASCADE
             )
         """)
-        
-        # Deduplicated Mistakes (UNIQUE constraint on question_text)
+
+        # 6. Questions Master Bank (Deduplicated via UNIQUE constraint on question_text)
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS question_mistakes (
+            CREATE TABLE IF NOT EXISTS questions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                subject TEXT NOT NULL,
-                chapter TEXT DEFAULT 'General',
+                subject_id INTEGER,
+                chapter_id INTEGER,
                 question_text TEXT UNIQUE NOT NULL,
-                correct_answer TEXT,
+                options_json TEXT,
+                correct_answer TEXT NOT NULL,
                 explanation TEXT,
-                wrong_count INTEGER DEFAULT 1,
-                correct_count INTEGER DEFAULT 0,
-                last_attempted TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE SET NULL,
+                FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE SET NULL
             )
         """)
 
-        # Written Evaluations with Rubric Breakdown
+        # 7. MCQ Exams Table
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS written_evaluations (
+            CREATE TABLE IF NOT EXISTS mcq_exams (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                subject TEXT NOT NULL,
-                question_title TEXT NOT NULL,
-                content_score INTEGER,
-                logic_score INTEGER,
-                terminology_score INTEGER,
-                grammar_score INTEGER,
-                total_score INTEGER,
-                feedback_json TEXT,
-                attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                subject_id INTEGER,
+                title TEXT NOT NULL,
+                total_questions INTEGER NOT NULL,
+                score REAL DEFAULT 0.0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE SET NULL
             )
         """)
-        
-        cursor.execute("INSERT OR IGNORE INTO threads (title) VALUES ('Default Chat')")
+
+        # 8. Written Exams Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS written_exams (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subject_id INTEGER,
+                title TEXT NOT NULL,
+                total_score REAL DEFAULT 0.0,
+                feedback_json TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE SET NULL
+            )
+        """)
+
+        # 9. Mistakes Engine Table (Deduplicated mistake counter per question)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS mistakes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question_id INTEGER UNIQUE NOT NULL,
+                wrong_count INTEGER DEFAULT 0,
+                correct_count INTEGER DEFAULT 0,
+                last_attempted TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+            )
+        """)
+
+        # 10. Revision Schedule Table (SuperMemo SM-2 Spaced Repetition)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS revision_schedule (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                question_id INTEGER UNIQUE NOT NULL,
+                easiness_factor REAL DEFAULT 2.5,
+                interval INTEGER DEFAULT 1,
+                repetitions INTEGER DEFAULT 0,
+                next_review_date TEXT NOT NULL,
+                FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+            )
+        """)
+
+        # 11. Analytics Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS analytics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subject_id INTEGER,
+                metric_name TEXT NOT NULL,
+                metric_value REAL NOT NULL,
+                recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Insert default fallback chat thread
+        cursor.execute(
+            "INSERT OR IGNORE INTO chat_threads (title) VALUES ('Default Chat')"
+        )
         conn.commit()
 
-# --- THREAD DB QUERIES ---
-def fetch_all_threads():
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT title FROM threads ORDER BY updated_at DESC")
-        return [row["title"] for row in cursor.fetchall()]
 
-def create_thread(title: str):
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("INSERT OR IGNORE INTO threads (title, updated_at) VALUES (?, CURRENT_TIMESTAMP)", (title,))
-        conn.commit()
-
-def delete_thread(title: str):
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM threads WHERE title = ?", (title,))
-        cursor.execute("DELETE FROM chat_messages WHERE thread_title = ?", (title,))
-        conn.commit()
-
-def add_chat_message(thread_title: str, role: str, content: str):
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO chat_messages (thread_title, role, content) VALUES (?, ?, ?)", (thread_title, role, content))
-        cursor.execute("UPDATE threads SET updated_at = CURRENT_TIMESTAMP WHERE title = ?", (thread_title,))
-        conn.commit()
-
-def fetch_thread_messages(thread_title: str):
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT role, content FROM chat_messages WHERE thread_title = ? ORDER BY timestamp ASC", (thread_title,))
-        return [dict(row) for row in cursor.fetchall()]
+if __name__ == "__main__":
+    init_db()
+    print("Database schema successfully initialized as 'study.db'.")
