@@ -11,30 +11,21 @@ logger = logging.getLogger(__name__)
 
 
 class MistakeUpdateResult(TypedDict):
-    mistake_id: int
+    schedule_id: int
+    question_id: int
     new_interval_days: int
     new_ease_factor: float
     new_repetitions: int
-    next_review_at: str
+    next_review_date: str
 
 
 def calculate_sm2(
     quality: int,
-    previous_interval: int = 0,
+    previous_interval: int = 1,
     previous_ef: float = 2.5,
     repetitions: int = 0,
 ) -> Tuple[int, float, int, datetime]:
-    """Calculates next review interval, ease factor, and repetition count via SM-2.
-
-    Args:
-        quality: Performance rating from 0 (complete blackout) to 5 (perfect recall).
-        previous_interval: Previous inter-repetition interval in days (>= 0).
-        previous_ef: Previous Ease Factor (>= 1.3).
-        repetitions: Number of successful consecutive reviews (>= 0).
-
-    Returns:
-        Tuple containing (next_interval_days, new_ease_factor, new_repetitions, next_review_date).
-    """
+    """Calculates next review interval, ease factor, and repetition count via SM-2."""
     if not isinstance(quality, int) or not (0 <= quality <= 5):
         raise ValueError(f"Quality rating must be an integer between 0 and 5, received {quality}.")
     if previous_interval < 0:
@@ -63,44 +54,57 @@ def calculate_sm2(
     return new_interval, round(new_ef, 3), new_repetitions, next_review_date
 
 
-def update_mistake_review(mistake_id: int, review_quality: int) -> MistakeUpdateResult:
-    """Updates mistake record with new SM-2 parameters after a revision session."""
+def update_mistake_review(question_id: int, review_quality: int) -> MistakeUpdateResult:
+    """Updates revision_schedules record with new SM-2 parameters after a review session."""
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT interval_days, ease_factor, repetitions FROM mistake_logs WHERE id = ?",
-            (mistake_id,),
+            "SELECT id, interval, easiness_factor, repetitions FROM revision_schedules WHERE question_id = ?",
+            (question_id,),
         )
         row = cursor.fetchone()
 
         if not row:
-            raise ValueError(f"Mistake record #{mistake_id} not found.")
+            # Initialize schedule row if missing
+            cursor.execute(
+                "INSERT INTO revision_schedules (question_id, easiness_factor, interval, repetitions) VALUES (?, 2.5, 1, 0)",
+                (question_id,),
+            )
+            conn.commit()
+            cursor.execute(
+                "SELECT id, interval, easiness_factor, repetitions FROM revision_schedules WHERE question_id = ?",
+                (question_id,),
+            )
+            row = cursor.fetchone()
 
-        prev_interval, prev_ef, prev_reps = row
-        new_interval, new_ef, new_reps, next_review_date = calculate_sm2(
+        sched_id, prev_interval, prev_ef, prev_reps = row
+        new_interval, new_ef, new_reps, next_review_dt = calculate_sm2(
             quality=review_quality,
-            previous_interval=prev_interval,
-            previous_ef=prev_ef,
-            repetitions=prev_reps,
+            previous_interval=prev_interval or 1,
+            previous_ef=prev_ef or 2.5,
+            repetitions=prev_reps or 0,
         )
+
+        next_rev_str = next_review_dt.strftime("%Y-%m-%d")
 
         cursor.execute(
             """
-            UPDATE mistake_logs
-            SET interval_days = ?, ease_factor = ?, repetitions = ?, next_review_at = ?
+            UPDATE revision_schedules
+            SET interval = ?, easiness_factor = ?, repetitions = ?, next_review_date = ?
             WHERE id = ?
             """,
-            (new_interval, new_ef, new_reps, next_review_date.isoformat(), mistake_id),
+            (new_interval, new_ef, new_reps, next_rev_str, sched_id),
         )
         conn.commit()
 
         return {
-            "mistake_id": mistake_id,
+            "schedule_id": sched_id,
+            "question_id": question_id,
             "new_interval_days": new_interval,
             "new_ease_factor": new_ef,
             "new_repetitions": new_reps,
-            "next_review_at": next_review_date.isoformat(),
+            "next_review_date": next_rev_str,
         }
     finally:
         conn.close()
