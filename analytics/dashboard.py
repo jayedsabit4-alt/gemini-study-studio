@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 import logging
 import sqlite3
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from database.database import get_db_connection
 
 logger = logging.getLogger(__name__)
@@ -12,12 +12,19 @@ logger = logging.getLogger(__name__)
 def calculate_study_streak(
     existing_conn: Optional[sqlite3.Connection] = None,
 ) -> Dict[str, Any]:
-    """Calculates active daily study streak and total sessions logged."""
+    """Calculates active daily study streak and total sessions logged using question attempts."""
     conn = existing_conn or get_db_connection()
     try:
         cursor = conn.cursor()
+        # Query activity dates from question_attempts and mcq_exams
         cursor.execute(
-            "SELECT DISTINCT DATE(created_at) FROM study_sessions ORDER BY DATE(created_at) DESC"
+            """
+            SELECT DISTINCT activity_date FROM (
+                SELECT DATE(attempted_at) AS activity_date FROM question_attempts WHERE attempted_at IS NOT NULL
+                UNION
+                SELECT DATE(created_at) AS activity_date FROM mcq_exams WHERE created_at IS NOT NULL
+            ) ORDER BY activity_date DESC
+            """
         )
         rows = cursor.fetchall()
 
@@ -63,13 +70,24 @@ def get_dashboard_summary() -> Dict[str, Any]:
     try:
         cursor = conn.cursor()
 
-        cursor.execute("SELECT COUNT(*), AVG(score_percentage) FROM exam_results")
+        # Query total exams and overall average score across MCQ and Written exams
+        cursor.execute(
+            """
+            SELECT 
+                (SELECT COUNT(*) FROM mcq_exams) + (SELECT COUNT(*) FROM written_exams) AS total_exams,
+                (SELECT AVG(score) FROM mcq_exams) AS avg_mcq_score
+            """
+        )
         exam_row = cursor.fetchone()
-        total_exams = exam_row[0] if exam_row else 0
+        total_exams = exam_row[0] if exam_row and exam_row[0] is not None else 0
         overall_avg_score = round(exam_row[1], 2) if (exam_row and exam_row[1] is not None) else 0.0
 
-        now_str = datetime.now().isoformat()
-        cursor.execute("SELECT COUNT(*) FROM mistake_logs WHERE next_review_at <= ?", (now_str,))
+        # Query due mistakes from revision_schedules
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        cursor.execute(
+            "SELECT COUNT(*) FROM revision_schedules WHERE next_review_date <= ? AND next_review_date != ''",
+            (today_str,),
+        )
         due_mistakes = cursor.fetchone()[0]
 
         streak_info = calculate_study_streak(existing_conn=conn)
