@@ -31,7 +31,7 @@ class EmbeddingEngine:
             self.model = None
 
     def embed(self, texts: Union[str, List[str]]) -> List[np.ndarray]:
-        """Generates normalized dense numpy array vectors for input texts."""
+        """Generates normalized dense vector embeddings using fast batching."""
         if isinstance(texts, str):
             texts = [texts]
 
@@ -39,7 +39,12 @@ class EmbeddingEngine:
             return []
 
         if self.model is not None:
-            embeddings = self.model.encode(texts, show_progress_bar=False, convert_to_numpy=True)
+            embeddings = self.model.encode(
+                texts,
+                batch_size=64,
+                show_progress_bar=False,
+                convert_to_numpy=True,
+            )
             return [emb.astype(np.float32) for emb in embeddings]
 
         fallback_vectors = []
