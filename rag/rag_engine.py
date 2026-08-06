@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from config import DEFAULT_TOP_K, MAX_RAG_CONTEXT_CHARS, STORAGE_DIR
 from llm.llm_client import generate_response
-from llm.prompts import RAG_QA_PROMPT
+from llm.prompts import build_rag_prompt
 from rag.chunker import create_chunks
 from rag.embeddings import EmbeddingEngine
 from rag.parser import extract_file
@@ -27,11 +27,11 @@ class RAGEngine:
             embedding_model_name=self.embedding_engine.model_name,
         )
         self.retriever = Retriever(self.embedding_engine, self.vector_store)
-        
+
         try:
             self.vector_store.load_from_disk(STORAGE_DIR)
         except Exception as err:
-            logger.warning(f"Could not load vector store from disk: {err}")
+            logger.warning("Could not load vector store from disk: %s", err)
 
     def _compute_hash(self, file_bytes: bytes) -> str:
         return hashlib.sha256(file_bytes).hexdigest()
@@ -74,11 +74,10 @@ class RAGEngine:
         self.vector_store.add_embeddings(chunks, embeddings)
         self.vector_store.indexed_hashes[file_hash] = filename
 
-        # Wrap save_to_disk inside try-except so disk warnings do not interrupt memory indexing
         try:
             self.vector_store.save_to_disk(STORAGE_DIR)
         except Exception as save_err:
-            logger.error(f"Failed to persist vector store to disk for {filename}: {save_err}")
+            logger.error("Failed to persist vector store to disk for %s: %s", filename, save_err)
 
         return {
             "filename": filename,
@@ -95,7 +94,7 @@ class RAGEngine:
         try:
             self.vector_store.save_to_disk(STORAGE_DIR)
         except Exception as save_err:
-            logger.error(f"Failed to persist document removal for {filename}: {save_err}")
+            logger.error("Failed to persist document removal for %s: %s", filename, save_err)
         return removed_count
 
     def ask_document(
@@ -137,9 +136,9 @@ class RAGEngine:
             current_chars += len(snippet)
 
         context_str = "\n\n".join(context_segments)
-        user_prompt_content = f"Study Context:\n{context_str}\n\nQuestion: {query}"
+        user_prompt_content = build_rag_prompt(context=context_str, question=query)
 
-        messages = [{"role": "system", "content": RAG_QA_PROMPT}]
+        messages = []
         if chat_history:
             messages.extend(chat_history)
         messages.append({"role": "user", "content": user_prompt_content})
