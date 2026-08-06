@@ -3,7 +3,7 @@
 import logging
 from typing import Any, Dict, Tuple
 from llm.llm_client import generate_json
-from llm.prompts import build_written_eval_prompt
+from llm.prompts import build_written_evaluation_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ def evaluate_written_submission(
     preferred_model: str = "openrouter/free",
 ) -> Tuple[bool, Dict[str, Any], str]:
     """Evaluates student written exam answer against key points using a clamped 10-point rubric."""
-    prompt_content = build_written_eval_prompt(
+    prompt_content = build_written_evaluation_prompt(
         question=question,
         key_points=key_points,
         student_answer=student_answer,
