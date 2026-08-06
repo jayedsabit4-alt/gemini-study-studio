@@ -10,14 +10,12 @@ from llm.prompts import build_mcq_prompt
 logger = logging.getLogger(__name__)
 
 
-def _normalize_mcq_choice(choice_text: str) -> str:
+def _normalize_mcq_choice(choice_text: Any) -> str:
     """Normalizes option choices (e.g., 'A) Paris', 'Option A', 'a.', 'A') into standard 'A'."""
-    if not choice_text:
+    if not choice_text or not isinstance(choice_text, str):
         return ""
 
     cleaned = choice_text.strip().upper()
-    
-    # Match choice string starting with A, B, C, or D
     match = re.search(r"^(?:OPTION\s*)?([A-D])[\s\)\.\:]*", cleaned)
     if match:
         return match.group(1)
@@ -38,7 +36,7 @@ def generate_mcq_paper(
         prompt_str = (
             f"You are a senior exam paper setter. Generate {count} multiple-choice questions (MCQs) "
             f"based EXCLUSIVELY on the provided study context for subject '{subject}', chapter '{chapter}'.\n\n"
-            f"Study Context:\n{context_document_text}\n\n"
+            f"Study Context:\n{context_document_text[:10000]}\n\n"
             "Output ONLY a raw JSON array of objects matching this schema:\n"
             "[\n"
             "  {\n"
@@ -63,7 +61,7 @@ def generate_mcq_paper(
     )
 
     if not success or not isinstance(result_json, list):
-        logger.error(f"MCQ paper generation failed: {model_used}")
+        logger.error("MCQ paper generation failed: %s", model_used)
         return False, [], model_used
 
     valid_questions = []
@@ -81,24 +79,24 @@ def generate_mcq_paper(
 
 
 def score_mcq_submission(
-    user_answers: Dict[int, str],
+    user_answers: Dict[int, Any],
     questions: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    """Scores student responses for an MCQ test session with robust choice string normalization."""
+    """Scores student responses safely handling None values for unanswered questions."""
     total = len(questions)
     correct_count = 0
     breakdown = []
 
     for idx, q in enumerate(questions):
-        user_ans_raw = user_answers.get(idx, "").strip()
-        correct_ans_raw = q["correct_answer"].strip()
+        raw_val = user_answers.get(idx)
+        user_ans_raw = raw_val.strip() if isinstance(raw_val, str) else ""
+        correct_ans_raw = str(q.get("correct_answer", "")).strip()
 
         user_code = _normalize_mcq_choice(user_ans_raw)
         correct_code = _normalize_mcq_choice(correct_ans_raw)
 
-        # Check equality between normalized option codes (e.g. 'A' == 'A') or direct raw string equivalence
         is_correct = (user_code != "" and user_code == correct_code) or (
-            user_ans_raw.lower() == correct_ans_raw.lower()
+            user_ans_raw.lower() == correct_ans_raw.lower() and user_ans_raw != ""
         )
 
         if is_correct:
