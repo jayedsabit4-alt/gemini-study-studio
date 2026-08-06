@@ -1,4 +1,25 @@
-"""SQLite Database Table DDL Statements, Constraints, and Performance Indexes."""
+"""SQLite Database Table DDL Statements for Notebook-Centric Architecture."""
+
+CREATE_NOTEBOOKS_TABLE = """
+CREATE TABLE IF NOT EXISTS notebooks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL UNIQUE,
+    description TEXT DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+CREATE_NOTES_TABLE = """
+CREATE TABLE IF NOT EXISTS notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    notebook_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    note_type TEXT DEFAULT 'General' CHECK (note_type IN ('General', 'Generated Questions', 'Mistake Reminder')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (notebook_id) REFERENCES notebooks(id) ON DELETE CASCADE
+);
+"""
 
 CREATE_SUBJECTS_TABLE = """
 CREATE TABLE IF NOT EXISTS subjects (
@@ -21,6 +42,7 @@ CREATE TABLE IF NOT EXISTS chapters (
 CREATE_DOCUMENTS_TABLE = """
 CREATE TABLE IF NOT EXISTS documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    notebook_id INTEGER,
     subject_id INTEGER,
     chapter_id INTEGER,
     name TEXT NOT NULL,
@@ -28,33 +50,16 @@ CREATE TABLE IF NOT EXISTS documents (
     file_path TEXT,
     text_content TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (notebook_id) REFERENCES notebooks(id) ON DELETE CASCADE,
     FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE SET NULL,
     FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE SET NULL
-);
-"""
-
-CREATE_CHAT_THREADS_TABLE = """
-CREATE TABLE IF NOT EXISTS chat_threads (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-"""
-
-CREATE_CHAT_HISTORY_TABLE = """
-CREATE TABLE IF NOT EXISTS chat_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    thread_id INTEGER NOT NULL,
-    role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
-    content TEXT NOT NULL,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (thread_id) REFERENCES chat_threads(id) ON DELETE CASCADE
 );
 """
 
 CREATE_QUESTIONS_TABLE = """
 CREATE TABLE IF NOT EXISTS questions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    notebook_id INTEGER,
     subject_id INTEGER,
     chapter_id INTEGER,
     question_text TEXT NOT NULL,
@@ -63,95 +68,48 @@ CREATE TABLE IF NOT EXISTS questions (
     explanation TEXT,
     question_type TEXT DEFAULT 'MCQ' CHECK (question_type IN ('MCQ', 'Written', 'TrueFalse', 'FillBlank')),
     difficulty TEXT DEFAULT 'Medium' CHECK (difficulty IN ('Easy', 'Medium', 'Hard')),
-    source TEXT,
-    page_number INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE SET NULL,
-    FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE SET NULL
+    FOREIGN KEY (notebook_id) REFERENCES notebooks(id) ON DELETE CASCADE,
+    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE SET NULL
 );
 """
 
 CREATE_MCQ_EXAMS_TABLE = """
 CREATE TABLE IF NOT EXISTS mcq_exams (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    notebook_id INTEGER,
     subject_id INTEGER,
     title TEXT NOT NULL,
     total_questions INTEGER NOT NULL,
     score REAL NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE SET NULL
-);
-"""
-
-CREATE_EXAM_QUESTIONS_TABLE = """
-CREATE TABLE IF NOT EXISTS exam_questions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    exam_id INTEGER NOT NULL,
-    question_id INTEGER NOT NULL,
-    user_answer TEXT,
-    is_correct BOOLEAN,
-    time_taken_seconds INTEGER,
-    FOREIGN KEY (exam_id) REFERENCES mcq_exams(id) ON DELETE CASCADE,
-    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+    FOREIGN KEY (notebook_id) REFERENCES notebooks(id) ON DELETE CASCADE
 );
 """
 
 CREATE_WRITTEN_EXAMS_TABLE = """
 CREATE TABLE IF NOT EXISTS written_exams (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    notebook_id INTEGER,
     subject_id INTEGER,
     title TEXT NOT NULL,
     total_score REAL NOT NULL,
     feedback_json TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE SET NULL
-);
-"""
-
-CREATE_QUESTION_ATTEMPTS_TABLE = """
-CREATE TABLE IF NOT EXISTS question_attempts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    question_id INTEGER NOT NULL,
-    exam_id INTEGER,
-    is_correct BOOLEAN NOT NULL,
-    response_time_seconds INTEGER NOT NULL,
-    attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
+    FOREIGN KEY (notebook_id) REFERENCES notebooks(id) ON DELETE CASCADE
 );
 """
 
 CREATE_MISTAKES_TABLE = """
 CREATE TABLE IF NOT EXISTS mistakes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    notebook_id INTEGER,
     question_id INTEGER NOT NULL,
     exam_id INTEGER,
     wrong_count INTEGER DEFAULT 0,
     correct_count INTEGER DEFAULT 0,
     last_attempted TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
-);
-"""
-
-CREATE_CHAPTER_MASTERY_TABLE = """
-CREATE TABLE IF NOT EXISTS chapter_mastery (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    subject_id INTEGER NOT NULL,
-    chapter_id INTEGER NOT NULL,
-    mastery_percentage REAL DEFAULT 0.0,
-    status TEXT DEFAULT 'Unreviewed' CHECK (status IN ('Unreviewed', 'Weak', 'Moderate', 'Strong', 'Mastered')),
-    last_reviewed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
-    FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
-);
-"""
-
-CREATE_FLASHCARDS_TABLE = """
-CREATE TABLE IF NOT EXISTS flashcards (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    question_id INTEGER,
-    front_text TEXT NOT NULL,
-    back_text TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (notebook_id) REFERENCES notebooks(id) ON DELETE CASCADE,
     FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE
 );
 """
@@ -168,54 +126,15 @@ CREATE TABLE IF NOT EXISTS revision_schedules (
 );
 """
 
-CREATE_SETTINGS_TABLE = """
-CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
-"""
-
-CREATE_ANALYTICS_TABLE = """
-CREATE TABLE IF NOT EXISTS analytics (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    subject_id INTEGER,
-    metric_name TEXT NOT NULL,
-    metric_value REAL NOT NULL,
-    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE SET NULL
-);
-"""
-
-# INDEX DEFINITIONS FOR QUERY OPTIMIZATION
-CREATE_INDEX_QUESTIONS_SUBJECT = "CREATE INDEX IF NOT EXISTS idx_questions_subject ON questions(subject_id);"
-CREATE_INDEX_QUESTIONS_CHAPTER = "CREATE INDEX IF NOT EXISTS idx_questions_chapter ON questions(chapter_id);"
-CREATE_INDEX_REVISION_NEXT_REVIEW = "CREATE INDEX IF NOT EXISTS idx_revision_next_review ON revision_schedules(next_review_date);"
-CREATE_INDEX_DOCUMENTS_CHAPTER = "CREATE INDEX IF NOT EXISTS idx_documents_chapter ON documents(chapter_id);"
-CREATE_INDEX_EXAM_QUESTIONS_EXAM = "CREATE INDEX IF NOT EXISTS idx_exam_questions_exam ON exam_questions(exam_id);"
-CREATE_INDEX_ATTEMPTS_QUESTION = "CREATE INDEX IF NOT EXISTS idx_attempts_question ON question_attempts(question_id);"
-
-# Immutable tuple of all schema setup statements
 ALL_SCHEMA_STATEMENTS = (
+    CREATE_NOTEBOOKS_TABLE,
+    CREATE_NOTES_TABLE,
     CREATE_SUBJECTS_TABLE,
     CREATE_CHAPTERS_TABLE,
     CREATE_DOCUMENTS_TABLE,
-    CREATE_CHAT_THREADS_TABLE,
-    CREATE_CHAT_HISTORY_TABLE,
     CREATE_QUESTIONS_TABLE,
     CREATE_MCQ_EXAMS_TABLE,
-    CREATE_EXAM_QUESTIONS_TABLE,
     CREATE_WRITTEN_EXAMS_TABLE,
-    CREATE_QUESTION_ATTEMPTS_TABLE,
     CREATE_MISTAKES_TABLE,
-    CREATE_CHAPTER_MASTERY_TABLE,
-    CREATE_FLASHCARDS_TABLE,
     CREATE_REVISION_SCHEDULES_TABLE,
-    CREATE_SETTINGS_TABLE,
-    CREATE_ANALYTICS_TABLE,
-    CREATE_INDEX_QUESTIONS_SUBJECT,
-    CREATE_INDEX_QUESTIONS_CHAPTER,
-    CREATE_INDEX_REVISION_NEXT_REVIEW,
-    CREATE_INDEX_DOCUMENTS_CHAPTER,
-    CREATE_INDEX_EXAM_QUESTIONS_EXAM,
-    CREATE_INDEX_ATTEMPTS_QUESTION,
 )
