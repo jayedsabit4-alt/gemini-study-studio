@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 import logging
 import math
-from typing import Tuple, TypedDict
+from typing import Optional, Tuple, TypedDict
 
 from database.database import get_db_connection
 
@@ -54,27 +54,34 @@ def calculate_sm2(
     return new_interval, round(new_ef, 3), new_repetitions, next_review_date
 
 
-def update_mistake_review(question_id: int, review_quality: int) -> MistakeUpdateResult:
+def update_mistake_review(
+    question_id: Optional[int] = None,
+    review_quality: int = 4,
+    mistake_id: Optional[int] = None,
+) -> MistakeUpdateResult:
     """Updates revision_schedules record with new SM-2 parameters after a review session."""
+    target_id = question_id if question_id is not None else mistake_id
+    if target_id is None:
+        raise ValueError("Must provide either question_id or mistake_id.")
+
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT id, interval, easiness_factor, repetitions FROM revision_schedules WHERE question_id = ?",
-            (question_id,),
+            (target_id,),
         )
         row = cursor.fetchone()
 
         if not row:
-            # Initialize schedule row if missing
             cursor.execute(
                 "INSERT INTO revision_schedules (question_id, easiness_factor, interval, repetitions) VALUES (?, 2.5, 1, 0)",
-                (question_id,),
+                (target_id,),
             )
             conn.commit()
             cursor.execute(
                 "SELECT id, interval, easiness_factor, repetitions FROM revision_schedules WHERE question_id = ?",
-                (question_id,),
+                (target_id,),
             )
             row = cursor.fetchone()
 
@@ -100,7 +107,7 @@ def update_mistake_review(question_id: int, review_quality: int) -> MistakeUpdat
 
         return {
             "schedule_id": sched_id,
-            "question_id": question_id,
+            "question_id": target_id,
             "new_interval_days": new_interval,
             "new_ease_factor": new_ef,
             "new_repetitions": new_reps,
