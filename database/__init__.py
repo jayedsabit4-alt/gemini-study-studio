@@ -1,6 +1,6 @@
 """Database Package API."""
 
-from .database import get_db_connection, init_db
+from .database import get_connection, get_db_connection, init_db
 from .models import (
     Analytics,
     Chapter,
@@ -22,6 +22,7 @@ from .models import (
 
 __all__ = [
     "get_db_connection",
+    "get_connection",
     "init_db",
     "Subject",
     "Chapter",
